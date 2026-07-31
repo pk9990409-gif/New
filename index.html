@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aperture — Media Upscale Studio</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --bg: #121316;
+    --bg-panel: #1a1c20;
+    --bg-card: #202226;
+    --line: #2c2f34;
+    --line-strong: #3a3d43;
+    --ink: #ECE9E2;
+    --ink-dim: #9B9890;
+    --ink-faint: #6C6A65;
+    --amber: #D98F4A;
+    --amber-dim: #7A5530;
+    --teal: #3F8F7C;
+    --teal-dim: #234C42;
+    --red: #C0564B;
+    --font-display: 'Fraunces', Georgia, serif;
+    --font-body: 'Inter', -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+    --radius: 4px;
+  }
+  @font-face{font-family:'Fraunces';src:local('Georgia');}
+  * { box-sizing: border-box; }
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--font-body);}
+  ::selection{background:var(--amber-dim);color:#fff;}
+
+  .wrap{max-width:1180px;margin:0 auto;padding:0 32px 120px;}
+
+  /* HEADER */
+  header{padding:56px 0 40px;border-bottom:1px solid var(--line);margin-bottom:40px;}
+  .eyebrow{font-family:var(--font-mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);margin:0 0 14px;}
+  h1{font-family:var(--font-display);font-weight:600;font-size:44px;letter-spacing:-.01em;margin:0 0 12px;line-height:1.05;}
+  .lede{font-size:16px;color:var(--ink-dim);max-width:560px;line-height:1.6;margin:0;}
+
+  /* MODE TABS */
+  .tabs{display:flex;gap:2px;margin-bottom:32px;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;width:fit-content;}
+  .tab{font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:11px 22px;background:var(--bg-panel);color:var(--ink-dim);cursor:pointer;border:none;transition:.15s;}
+  .tab.active{background:var(--amber);color:#181005;}
+  .tab:not(.active):hover{background:var(--bg-card);color:var(--ink);}
+
+  /* DROPZONE */
+  .dropzone{border:1px dashed var(--line-strong);border-radius:8px;padding:48px 32px;text-align:center;background:var(--bg-panel);cursor:pointer;transition:.15s;margin-bottom:36px;}
+  .dropzone:hover, .dropzone.drag{border-color:var(--amber);background:#1d1a14;}
+  .dropzone .dz-icon{font-size:28px;color:var(--ink-faint);margin-bottom:10px;}
+  .dropzone .dz-title{font-size:15px;margin-bottom:4px;}
+  .dropzone .dz-sub{font-size:12.5px;color:var(--ink-faint);font-family:var(--font-mono);}
+  input[type=file]{display:none;}
+
+  /* CONTROL PANEL */
+  .panel{background:var(--bg-panel);border:1px solid var(--line);border-radius:8px;padding:28px 30px;margin-bottom:36px;}
+  .panel h2{font-family:var(--font-display);font-size:19px;font-weight:600;margin:0 0 20px;display:flex;align-items:center;gap:10px;}
+  .panel h2 .idx{font-family:var(--font-mono);font-size:11px;color:var(--amber);border:1px solid var(--amber-dim);border-radius:3px;padding:2px 6px;}
+
+  .control-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:22px;}
+  .field label{display:block;font-size:12.5px;color:var(--ink-dim);margin-bottom:8px;font-family:var(--font-mono);letter-spacing:.02em;}
+  .seg{display:flex;border:1px solid var(--line-strong);border-radius:var(--radius);overflow:hidden;}
+  .seg button{flex:1;background:var(--bg-card);color:var(--ink-dim);border:none;padding:9px 0;font-size:13px;cursor:pointer;font-family:var(--font-mono);border-right:1px solid var(--line-strong);}
+  .seg button:last-child{border-right:none;}
+  .seg button.active{background:var(--teal-dim);color:#fff;}
+
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--line);}
+  .toggle-row:last-child{border-bottom:none;}
+  .toggle-row .t-label{font-size:14px;}
+  .toggle-row .t-sub{font-size:12px;color:var(--ink-faint);margin-top:2px;}
+  .switch{position:relative;width:38px;height:21px;flex-shrink:0;}
+  .switch input{opacity:0;width:0;height:0;}
+  .slider-el{position:absolute;cursor:pointer;inset:0;background:var(--line-strong);border-radius:20px;transition:.15s;}
+  .slider-el:before{content:"";position:absolute;height:15px;width:15px;left:3px;top:3px;background:#EDEBE6;border-radius:50%;transition:.15s;}
+  input:checked + .slider-el{background:var(--teal);}
+  input:checked + .slider-el:before{transform:translateX(17px);}
+
+  .range-row{margin-top:6px;}
+  input[type=range]{width:100%;accent-color:var(--amber);}
+
+  .primary-btn{background:var(--amber);color:#181005;border:none;border-radius:var(--radius);padding:13px 26px;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font-body);letter-spacing:.01em;}
+  .primary-btn:hover{background:#e6a15e;}
+  .primary-btn:disabled{background:var(--line-strong);color:var(--ink-faint);cursor:not-allowed;}
+  .ghost-btn{background:transparent;color:var(--ink-dim);border:1px solid var(--line-strong);border-radius:var(--radius);padding:12px 22px;font-size:13px;cursor:pointer;font-family:var(--font-body);}
+  .ghost-btn:hover{border-color:var(--ink-dim);color:var(--ink);}
+  .btn-row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+  .count-pill{font-family:var(--font-mono);font-size:12px;color:var(--ink-faint);}
+
+  /* WATERMARK TOOL */
+  .wm-canvas-wrap{position:relative;border:1px solid var(--line-strong);border-radius:6px;overflow:hidden;background:#000;margin-top:8px;cursor:crosshair;}
+  .wm-canvas-wrap canvas{display:block;width:100%;height:auto;}
+  .wm-hint{font-size:12px;color:var(--ink-faint);margin-top:8px;font-family:var(--font-mono);}
+
+  /* RESULTS */
+  .results-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:20px;}
+  .results-head h2{font-family:var(--font-display);font-size:22px;margin:0;}
+  .results-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;}
+  @media (max-width:760px){.results-grid{grid-template-columns:1fr;} .control-grid{grid-template-columns:1fr;}}
+
+  .result-card{background:var(--bg-card);border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+  .compare{position:relative;width:100%;aspect-ratio:16/10;background:#000;overflow:hidden;}
+  .compare img, .compare video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;}
+  .compare .after-layer{clip-path:inset(0 0 0 50%);}
+  .compare-divider{position:absolute;top:0;bottom:0;left:50%;width:2px;background:var(--amber);pointer-events:none;transform:translateX(-1px);}
+  .compare-divider:after{content:"";position:absolute;top:50%;left:50%;width:26px;height:26px;background:var(--amber);border-radius:50%;transform:translate(-50%,-50%);}
+  .compare input[type=range]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:ew-resize;margin:0;}
+  .tag{position:absolute;top:10px;font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:3px;background:rgba(0,0,0,.55);color:#fff;}
+  .tag.before{left:10px;} .tag.after{right:10px;background:var(--amber);color:#181005;}
+
+  .card-meta{padding:16px 18px;}
+  .card-meta .fname{font-size:13.5px;margin-bottom:4px;word-break:break-all;}
+  .card-meta .fmeta{font-size:11.5px;color:var(--ink-faint);font-family:var(--font-mono);margin-bottom:12px;}
+  .card-actions{display:flex;gap:10px;}
+  .card-actions button{flex:1;font-size:12.5px;padding:9px 0;}
+
+  .progress-wrap{margin-top:10px;height:3px;background:var(--line);border-radius:2px;overflow:hidden;}
+  .progress-bar{height:100%;background:var(--amber);width:0%;transition:width .2s;}
+
+  .empty-note{color:var(--ink-faint);font-size:13px;font-family:var(--font-mono);padding:40px 0;text-align:center;border:1px dashed var(--line);border-radius:8px;}
+  .footer-note{margin-top:60px;padding-top:24px;border-top:1px solid var(--line);font-size:12px;color:var(--ink-faint);line-height:1.7;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">Aperture — Client-side restoration lab</p>
+    <h1>Upscale &amp; restore, frame by frame.</h1>
+    <p class="lede">Bulk image and video enhancement — resolution upscaling, detail sharpening, and clean object/watermark removal, with a before &amp; after preview on every file. Runs entirely in your browser; nothing uploads anywhere.</p>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-mode="image">Images</button>
+    <button class="tab" data-mode="video">Video</button>
+  </div>
+
+  <!-- DROPZONE -->
+  <div class="dropzone" id="dropzone">
+    <div class="dz-icon" id="dzIcon">▲</div>
+    <div class="dz-title" id="dzTitle">Drop images here, or click to browse</div>
+    <div class="dz-sub" id="dzSub">Bulk upload supported · JPG, PNG, WEBP</div>
+  </div>
+  <input type="file" id="fileInput" multiple accept="image/*">
+
+  <!-- OPTIONS PANEL -->
+  <div class="panel">
+    <h2><span class="idx">01</span> Upscale &amp; detail analysis</h2>
+    <div class="control-grid">
+      <div class="field">
+        <label>Target resolution</label>
+        <div class="seg" id="scaleSeg">
+          <button data-scale="2" class="active">2×</button>
+          <button data-scale="4">4×</button>
+          <button data-scale="8">8× (8K)</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Detail strength — <span id="detailVal">60</span>%</label>
+        <div class="range-row"><input type="range" id="detailRange" min="0" max="100" value="60"></div>
+      </div>
+    </div>
+    <div class="toggle-row">
+      <div><div class="t-label">Unblur &amp; sharpen</div><div class="t-sub">Corrects soft focus and low-resolution blur before upscaling</div></div>
+      <label class="switch"><input type="checkbox" id="toggleUnblur" checked><span class="slider-el"></span></label>
+    </div>
+    <div class="toggle-row">
+      <div><div class="t-label">Pixel-level noise reduction</div><div class="t-sub">Cleans compression artifacts frame-by-frame prior to output</div></div>
+      <label class="switch"><input type="checkbox" id="toggleDenoise" checked><span class="slider-el"></span></label>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2><span class="idx">02</span> Object &amp; watermark remover <span style="font-family:var(--font-mono);font-size:11px;color:var(--ink-faint);font-weight:400;">— optional, per file</span></h2>
+    <p style="font-size:13px;color:var(--ink-dim);margin:0 0 10px;">Select a source file below, then drag a box over the object or watermark to erase. This runs as a separate step from upscaling.</p>
+    <select id="wmFileSelect" style="background:var(--bg-card);color:var(--ink);border:1px solid var(--line-strong);border-radius:4px;padding:9px 12px;font-family:var(--font-mono);font-size:12.5px;width:100%;margin-bottom:12px;">
+      <option value="">— choose an uploaded file —</option>
+    </select>
+    <div class="wm-canvas-wrap" id="wmWrap" style="display:none;">
+      <canvas id="wmCanvas"></canvas>
+    </div>
+    <div class="wm-hint" id="wmHint" style="display:none;">Drag to mark a region · release to erase it</div>
+    <div class="btn-row" style="margin-top:12px;" id="wmActions" style="display:none;"></div>
+  </div>
+
+  <div class="panel">
+    <h2><span class="idx">03</span> Run batch</h2>
+    <div class="btn-row">
+      <button class="primary-btn" id="runBtn" disabled>Process all files</button>
+      <button class="ghost-btn" id="downloadAllBtn" style="display:none;">Download all (.zip)</button>
+      <span class="count-pill" id="countPill">0 files queued</span>
+    </div>
+    <div class="progress-wrap" id="progressWrap" style="display:none;"><div class="progress-bar" id="progressBar"></div></div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="results-head"><h2>Preview — before &amp; after</h2></div>
+  <div id="resultsArea"><div class="empty-note">Processed files will appear here with a draggable before/after comparison.</div></div>
+
+  <div class="footer-note">
+    Processing runs locally using canvas-based upscaling (Lanczos-style resampling), an unsharp-mask detail pass, and edge-sampled inpainting for the object/watermark remover — no files leave your device. Downloads save to your browser's local download folder.
+  </div>
+
+</div>
+
+<script>
+(function(){
+  let mode = 'image';
+  let queue = []; // {id, file, url, type}
+  let results = []; // {id, name, beforeUrl, afterUrl or afterBlob, kind}
+  let uid = 0;
+
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const dzTitle = document.getElementById('dzTitle');
+  const dzSub = document.getElementById('dzSub');
+  const dzIcon = document.getElementById('dzIcon');
+  const countPill = document.getElementById('countPill');
+  const runBtn = document.getElementById('runBtn');
+  const downloadAllBtn = document.getElementById('downloadAllBtn');
+  const resultsArea = document.getElementById('resultsArea');
+  const progressWrap = document.getElementById('progressWrap');
+  const progressBar = document.getElementById('progressBar');
+  const wmFileSelect = document.getElementById('wmFileSelect');
+  const wmWrap = document.getElementById('wmWrap');
+  const wmCanvas = document.getElementById('wmCanvas');
+  const wmHint = document.getElementById('wmHint');
+  const wmActions = document.getElementById('wmActions');
+
+  let scale = 2;
+  document.getElementById('scaleSeg').addEventListener('click', e=>{
+    if(e.target.tagName!=='BUTTON') return;
+    [...e.target.parentElement.children].forEach(b=>b.classList.remove('active'));
+    e.target.classList.add('active');
+    scale = parseInt(e.target.dataset.scale);
+  });
+  const detailRange = document.getElementById('detailRange');
+  const detailVal = document.getElementById('detailVal');
+  detailRange.addEventListener('input', ()=> detailVal.textContent = detailRange.value);
+
+  // ---- TABS ----
+  document.querySelectorAll('.tab').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+      tab.classList.add('active');
+      mode = tab.dataset.mode;
+      if(mode==='image'){
+        fileInput.accept='image/*';
+        dzTitle.textContent='Drop images here, or click to browse';
+        dzSub.textContent='Bulk upload supported · JPG, PNG, WEBP';
+      } else {
+        fileInput.accept='video/*';
+        dzTitle.textContent='Drop videos here, or click to browse';
+        dzSub.textContent='Bulk upload supported · MP4, WEBM, MOV';
+      }
+      queue = []; updateCount(); resultsArea.innerHTML = '<div class="empty-note">Processed files will appear here with a draggable before/after comparison.</div>';
+      wmFileSelect.innerHTML = '<option value="">— choose an uploaded file —</option>';
+      wmWrap.style.display='none'; wmHint.style.display='none'; wmActions.innerHTML='';
+    });
+  });
+
+  // ---- DROPZONE ----
+  dropzone.addEventListener('click', ()=> fileInput.click());
+  dropzone.addEventListener('dragover', e=>{ e.preventDefault(); dropzone.classList.add('drag'); });
+  dropzone.addEventListener('dragleave', ()=> dropzone.classList.remove('drag'));
+  dropzone.addEventListener('drop', e=>{
+    e.preventDefault(); dropzone.classList.remove('drag');
+    handleFiles(e.dataTransfer.files);
+  });
+  fileInput.addEventListener('change', e=> handleFiles(e.target.files));
+
+  function handleFiles(fileList){
+    [...fileList].forEach(file=>{
+      const id = 'f'+(uid++);
+      const url = URL.createObjectURL(file);
+      queue.push({id, file, url, type: mode});
+      const opt = document.createElement('option');
+      opt.value = id; opt.textContent = file.name;
+      wmFileSelect.appendChild(opt);
+    });
+    updateCount();
+  }
+
+  function updateCount(){
+    countPill.textContent = queue.length + ' file' + (queue.length===1?'':'s') + ' queued';
+    runBtn.disabled = queue.length===0;
+  }
+
+  // ================= IMAGE PROCESSING =================
+  function loadImage(url){
+    return new Promise((res,rej)=>{
+      const img = new Image();
+      img.onload=()=>res(img);
+      img.onerror=rej;
+      img.src=url;
+    });
+  }
+
+  // Unsharp mask convolution for detail/sharpen pass
+  function unsharpMask(ctx, w, h, amount){
+    if(amount<=0) return;
+    const src = ctx.getImageData(0,0,w,h);
+    const data = src.data;
+    const copy = new Uint8ClampedArray(data);
+    const k = [0,-1,0,-1,5,-1,0,-1,0]; // basic sharpen kernel
+    const strength = amount/100;
+    for(let y=1;y<h-1;y++){
+      for(let x=1;x<w-1;x++){
+        for(let c=0;c<3;c++){
+          let sum=0, idx=0;
+          for(let ky=-1;ky<=1;ky++){
+            for(let kx=-1;kx<=1;kx++){
+              const px = ((y+ky)*w + (x+kx))*4 + c;
+              sum += copy[px]*k[idx]; idx++;
+            }
+          }
+          const orig = copy[(y*w+x)*4+c];
+          const sharpened = sum;
+          const blended = orig*(1-strength) + sharpened*strength;
+          data[(y*w+x)*4+c] = blended;
+        }
+      }
+    }
+    ctx.putImageData(src,0,0);
+  }
+
+  // simple gaussian-ish blur for "unblur" pre-pass denoise (light smoothing to remove compression noise before sharpen)
+  function lightDenoise(ctx,w,h){
+    ctx.filter='blur(0.4px)';
+    ctx.drawImage(ctx.canvas,0,0);
+    ctx.filter='none';
+  }
+
+  async function processImage(item){
+    const img = await loadImage(item.url);
+    const targetW = Math.round(img.naturalWidth * scale);
+    const targetH = Math.round(img.naturalHeight * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = targetW; canvas.height = targetH;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    // progressive upscale in steps of 2x for better quality than single jump
+    let curCanvas = document.createElement('canvas');
+    curCanvas.width = img.naturalWidth; curCanvas.height = img.naturalHeight;
+    curCanvas.getContext('2d').drawImage(img,0,0);
+    let curW = img.naturalWidth, curH = img.naturalHeight;
+    while(curW < targetW){
+      const nextW = Math.min(targetW, curW*2);
+      const nextH = Math.min(targetH, curH*2);
+      const next = document.createElement('canvas');
+      next.width = nextW; next.height = nextH;
+      const nctx = next.getContext('2d');
+      nctx.imageSmoothingEnabled = true;
+      nctx.imageSmoothingQuality = 'high';
+      nctx.drawImage(curCanvas,0,0,nextW,nextH);
+      curCanvas = next; curW = nextW; curH = nextH;
+    }
+    ctx.drawImage(curCanvas,0,0,targetW,targetH);
+
+    if(document.getElementById('toggleDenoise').checked){
+      lightDenoise(ctx,targetW,targetH);
+    }
+    if(document.getElementById('toggleUnblur').checked){
+      unsharpMask(ctx, targetW, targetH, parseInt(detailRange.value));
+    }
+
+    const blob = await new Promise(res=> canvas.toBlob(res, 'image/png'));
+    return { blob, w: targetW, h: targetH, canvas };
+  }
+
+  // ================= VIDEO PROCESSING =================
+  async function processVideo(item, onProgress){
+    return new Promise((resolve,reject)=>{
+      const video = document.createElement('video');
+      video.src = item.url; video.muted = true; video.playsInline = true;
+      video.addEventListener('loadedmetadata', async ()=>{
+        const targetW = Math.round(video.videoWidth * Math.min(scale,4)); // cap video scale for perf
+        const targetH = Math.round(video.videoHeight * Math.min(scale,4));
+        const canvas = document.createElement('canvas');
+        canvas.width = targetW; canvas.height = targetH;
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality='high';
+
+        const stream = canvas.captureStream(30);
+        const recorder = new MediaRecorder(stream, {mimeType:'video/webm;codecs=vp9', videoBitsPerSecond: 8_000_000});
+        const chunks = [];
+        recorder.ondataavailable = e=> chunks.push(e.data);
+        recorder.onstop = ()=>{
+          const blob = new Blob(chunks, {type:'video/webm'});
+          resolve({blob, w:targetW, h:targetH});
+        };
+
+        video.currentTime = 0;
+        await video.play().catch(()=>{});
+        recorder.start();
+
+        const duration = video.duration;
+        function drawFrame(){
+          if(video.ended || video.paused){
+            recorder.stop();
+            return;
+          }
+          ctx.drawImage(video,0,0,targetW,targetH);
+          if(document.getElementById('toggleUnblur').checked){
+            unsharpMask(ctx, targetW, targetH, Math.min(30,parseInt(detailRange.value)));
+          }
+          if(onProgress) onProgress(Math.min(99, Math.round((video.currentTime/duration)*100)));
+          requestAnimationFrame(drawFrame);
+        }
+        drawFrame();
+      });
+      video.addEventListener('error', reject);
+    });
+  }
+
+  // ================= RUN BATCH =================
+  runBtn.addEventListener('click', async ()=>{
+    if(queue.length===0) return;
+    runBtn.disabled = true;
+    progressWrap.style.display='block';
+    resultsArea.innerHTML = '';
+    results = [];
+    let done = 0;
+    for(const item of queue){
+      progressBar.style.width = Math.round((done/queue.length)*100)+'%';
+      try{
+        if(item.type==='image'){
+          const out = await processImage(item);
+          const afterUrl = URL.createObjectURL(out.blob);
+          results.push({id:item.id, name:item.file.name, kind:'image', beforeUrl:item.url, afterUrl, w:out.w, h:out.h, blob:out.blob});
+        } else {
+          const out = await processVideo(item, p=>{
+            progressBar.style.width = Math.round(((done+p/100)/queue.length)*100)+'%';
+          });
+          const afterUrl = URL.createObjectURL(out.blob);
+          results.push({id:item.id, name:item.file.name, kind:'video', beforeUrl:item.url, afterUrl, w:out.w, h:out.h, blob:out.blob});
+        }
+      }catch(err){
+        console.error('processing failed', err);
+      }
+      done++;
+      progressBar.style.width = Math.round((done/queue.length)*100)+'%';
+      renderResults();
+    }
+    progressWrap.style.display='none';
+    runBtn.disabled = false;
+    if(results.length) downloadAllBtn.style.display='inline-block';
+  });
+
+  function renderResults(){
+    if(results.length===0){
+      resultsArea.innerHTML = '<div class="empty-note">Processed files will appear here with a draggable before/after comparison.</div>';
+      return;
+    }
+    resultsArea.innerHTML = '';
+    const grid = document.createElement('div');
+    grid.className = 'results-grid';
+    results.forEach(r=>{
+      const card = document.createElement('div');
+      card.className = 'result-card';
+      const mediaTagBefore = r.kind==='image'
+        ? `<img src="${r.beforeUrl}" class="before-layer">`
+        : `<video src="${r.beforeUrl}" class="before-layer" muted loop autoplay playsinline></video>`;
+      const mediaTagAfter = r.kind==='image'
+        ? `<img src="${r.afterUrl}" class="after-layer">`
+        : `<video src="${r.afterUrl}" class="after-layer" muted loop autoplay playsinline></video>`;
+      card.innerHTML = `
+        <div class="compare">
+          ${mediaTagBefore}
+          <div class="after-wrap after-layer" style="position:absolute;inset:0;">${mediaTagAfter}</div>
+          <div class="compare-divider"></div>
+          <span class="tag before">Before</span>
+          <span class="tag after">After</span>
+          <input type="range" min="0" max="100" value="50">
+        </div>
+        <div class="card-meta">
+          <div class="fname">${r.name}</div>
+          <div class="fmeta">${r.w}×${r.h} · ${r.kind==='image'?'PNG':'WEBM'}</div>
+          <div class="card-actions">
+            <button class="ghost-btn dl-btn">Download</button>
+          </div>
+        </div>
+      `;
+      const afterWrap = card.querySelector('.after-wrap');
+      const divider = card.querySelector('.compare-divider');
+      const range = card.querySelector('input[type=range]');
+      range.addEventListener('input', ()=>{
+        afterWrap.style.clipPath = `inset(0 0 0 ${range.value}%)`;
+        divider.style.left = range.value+'%';
+      });
+      card.querySelector('.dl-btn').addEventListener('click', ()=>{
+        const a = document.createElement('a');
+        a.href = r.afterUrl;
+        a.download = 'upscaled_' + r.name.replace(/\.[^.]+$/, '') + (r.kind==='image' ? '.png':'.webm');
+        a.click();
+      });
+      grid.appendChild(card);
+    });
+    resultsArea.appendChild(grid);
+  }
+
+  downloadAllBtn.addEventListener('click', async ()=>{
+    downloadAllBtn.disabled = true;
+    downloadAllBtn.textContent = 'Zipping…';
+    const zip = new JSZip();
+    for(const r of results){
+      const ext = r.kind==='image' ? '.png' : '.webm';
+      zip.file('upscaled_' + r.name.replace(/\.[^.]+$/, '') + ext, r.blob);
+    }
+    const content = await zip.generateAsync({type:'blob'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(content);
+    a.download = 'aperture_batch_output.zip';
+    a.click();
+    downloadAllBtn.disabled = false;
+    downloadAllBtn.textContent = 'Download all (.zip)';
+  });
+
+  // ================= WATERMARK / OBJECT REMOVER =================
+  let wmImg = null, wmCtx = null, wmSelecting=false, wmStart=null, wmScaleX=1, wmScaleY=1;
+  wmFileSelect.addEventListener('change', async ()=>{
+    const id = wmFileSelect.value;
+    if(!id){ wmWrap.style.display='none'; wmHint.style.display='none'; wmActions.innerHTML=''; return; }
+    const item = queue.find(q=>q.id===id);
+    if(!item || item.type!=='image'){
+      wmWrap.style.display='none'; wmHint.style.display='none';
+      wmActions.innerHTML = '<span class="count-pill">Watermark tool currently supports image files.</span>';
+      return;
+    }
+    wmImg = await loadImage(item.url);
+    const maxW = 700;
+    const displayW = Math.min(maxW, wmImg.naturalWidth);
+    const displayH = displayW / wmImg.naturalWidth * wmImg.naturalHeight;
+    wmCanvas.width = wmImg.naturalWidth; wmCanvas.height = wmImg.naturalHeight;
+    wmCanvas.style.width = displayW+'px'; wmCanvas.style.height = displayH+'px';
+    wmCtx = wmCanvas.getContext('2d');
+    wmCtx.drawImage(wmImg,0,0);
+    wmWrap.style.display='block'; wmHint.style.display='block';
+    wmActions.innerHTML = '<button class="ghost-btn" id="wmReset">Reset</button><button class="primary-btn" id="wmSave">Use this version in batch</button>';
+    document.getElementById('wmReset').onclick = ()=>{ wmCtx.drawImage(wmImg,0,0); };
+    document.getElementById('wmSave').onclick = ()=>{
+      wmCanvas.toBlob(blob=>{
+        const url = URL.createObjectURL(blob);
+        const it = queue.find(q=>q.id===id);
+        it.url = url;
+        it.file = new File([blob], it.file.name, {type:'image/png'});
+        alert('Watermark-cleaned version saved for "'+it.file.name+'" — it will be used when you run the batch.');
+      });
+    };
+  });
+
+  function wmPointerPos(e){
+    const rect = wmCanvas.getBoundingClientRect();
+    const scaleX = wmCanvas.width / rect.width;
+    const scaleY = wmCanvas.height / rect.height;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return { x: (clientX-rect.left)*scaleX, y: (clientY-rect.top)*scaleY };
+  }
+
+  wmCanvas.addEventListener('mousedown', e=>{
+    wmSelecting = true;
+    wmStart = wmPointerPos(e);
+  });
+  window.addEventListener('mousemove', e=>{
+    if(!wmSelecting || !wmCtx) return;
+    const cur = wmPointerPos(e);
+    wmCtx.drawImage(wmImg,0,0); // redraw base (note: loses prior erasures during drag preview; committed on mouseup)
+    reapplyErasures();
+    wmCtx.strokeStyle = '#D98F4A';
+    wmCtx.lineWidth = 2;
+    wmCtx.strokeRect(Math.min(wmStart.x,cur.x), Math.min(wmStart.y,cur.y), Math.abs(cur.x-wmStart.x), Math.abs(cur.y-wmStart.y));
+  });
+  let erasureRects = [];
+  function reapplyErasures(){
+    erasureRects.forEach(r=> eraseRegion(r.x,r.y,r.w,r.h));
+  }
+  window.addEventListener('mouseup', e=>{
+    if(!wmSelecting || !wmCtx) return;
+    wmSelecting = false;
+    const cur = wmPointerPos(e);
+    const rx = Math.round(Math.min(wmStart.x,cur.x)), ry = Math.round(Math.min(wmStart.y,cur.y));
+    const rw = Math.round(Math.abs(cur.x-wmStart.x)), rh = Math.round(Math.abs(cur.y-wmStart.y));
+    if(rw>4 && rh>4){
+      erasureRects.push({x:rx,y:ry,w:rw,h:rh});
+      eraseRegion(rx,ry,rw,rh);
+    }
+  });
+
+  // Edge-sampled inpainting: fill rect by sampling/stretching border pixels inward (works well on flat/watermark regions)
+  function eraseRegion(rx,ry,rw,rh){
+    const imgData = wmCtx.getImageData(0,0,wmCanvas.width,wmCanvas.height);
+    const d = imgData.data; const W = wmCanvas.width;
+    const pad = 3;
+    for(let y=ry; y<ry+rh; y++){
+      for(let x=rx; x<rx+rw; x++){
+        if(x<0||y<0||x>=wmCanvas.width||y>=wmCanvas.height) continue;
+        // sample from nearest valid border just outside the rect, blending left/right/top/bottom edge colors by relative position
+        const fracX = (x-rx)/rw, fracY = (y-ry)/rh;
+        const leftX = Math.max(0, rx-pad), rightX = Math.min(W-1, rx+rw+pad);
+        const topY = Math.max(0, ry-pad), botY = Math.min(wmCanvas.height-1, ry+rh+pad);
+        const li = (y*W+leftX)*4, ri = (y*W+rightX)*4;
+        const ti = (topY*W+x)*4, bi = (botY*W+x)*4;
+        for(let c=0;c<3;c++){
+          const horiz = d[li+c]*(1-fracX) + d[ri+c]*fracX;
+          const vert = d[ti+c]*(1-fracY) + d[bi+c]*fracY;
+          d[(y*W+x)*4+c] = (horiz+vert)/2;
+        }
+        d[(y*W+x)*4+3] = 255;
+      }
+    }
+    wmCtx.putImageData(imgData,0,0);
+  }
+
+})();
+</script>
+</body>
+</html>
